@@ -54,7 +54,6 @@ robot_cfg = EntityCfg(
 from mjlab.actuator import DelayedActuatorCfg, BuiltinPositionActuatorCfg
 
 DelayedActuatorCfg(
-  joint_names_expr=(".*",),
   base_cfg=BuiltinPositionActuatorCfg(
     joint_names_expr=(".*",),
     stiffness=80.0,
@@ -216,7 +215,6 @@ from mjlab.actuator import DelayedActuatorCfg, IdealPdActuatorCfg
 # Add 2-5 step delay to position commands.
 actuators = (
   DelayedActuatorCfg(
-    joint_names_expr=(".*",),
     base_cfg=IdealPdActuatorCfg(
       joint_names_expr=(".*",),
       stiffness=80.0,
@@ -235,7 +233,6 @@ actuators = (
 
 ```python
 DelayedActuatorCfg(
-  joint_names_expr=(".*",),
   base_cfg=IdealPdActuatorCfg(...),
   delay_target=("position", "velocity", "effort"),
   delay_min_lag=2,
