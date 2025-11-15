@@ -1,16 +1,22 @@
 """Task registry system for managing environment registration and creation."""
 
+from collections.abc import Callable
+
 from mjlab.envs import ManagerBasedRlEnvCfg
 from mjlab.rl import RslRlOnPolicyRunnerCfg
 
 # Private module-level registry: task_id -> (env_cfg, rl_cfg, runner_cls)
-EnvRlCfgPair = tuple[ManagerBasedRlEnvCfg, RslRlOnPolicyRunnerCfg, type | None]
+EnvRlCfgPair = tuple[
+  ManagerBasedRlEnvCfg | Callable[[], ManagerBasedRlEnvCfg],
+  RslRlOnPolicyRunnerCfg,
+  type | None,
+]
 _REGISTRY: dict[str, EnvRlCfgPair] = {}
 
 
 def register_mjlab_task(
   task_id: str,
-  env_cfg: ManagerBasedRlEnvCfg,
+  env_cfg: ManagerBasedRlEnvCfg | Callable[[], ManagerBasedRlEnvCfg],
   rl_cfg: RslRlOnPolicyRunnerCfg,
   runner_cls: type | None = None,
 ) -> None:
