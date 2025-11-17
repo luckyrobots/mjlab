@@ -363,12 +363,12 @@ def run_sim(
 
             # Log object data if present
             if motion.has_object and motion_object_pos is not None:
-                # Store object data (expanding dimensions to match body_link format)
+                # Store sim-measured object pose as flat (3,) and (4,) arrays.
                 log["object_pos_w"].append(
-                    motion_object_pos[0].unsqueeze(0).cpu().numpy().copy()
+                    object.data.body_link_pos_w[0, 0].cpu().numpy().copy()  # pyright: ignore[reportPossiblyUnboundVariable]
                 )
                 log["object_quat_w"].append(
-                    motion_object_rot[0].unsqueeze(0).cpu().numpy().copy()  # pyright: ignore[reportOptionalSubscript]
+                    object.data.body_link_quat_w[0, 0].cpu().numpy().copy()  # pyright: ignore[reportPossiblyUnboundVariable]
                 )
 
             torch.testing.assert_close(

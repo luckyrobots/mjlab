@@ -232,6 +232,54 @@ def create_locomanipulation_env_cfg(
         "ranges": (-0.01, 0.01),
       },
     ),
+    "object_mass": EventTermCfg(
+      mode="startup",
+      func=mdp.randomize_field,
+      domain_randomization=True,
+      params={
+        "asset_cfg": SceneEntityCfg("object"),
+        "field": "body_mass",
+        "ranges": (0.1, 2.0),
+        "operation": "abs",
+      },
+    ),
+    "object_com": EventTermCfg(
+      mode="startup",
+      func=mdp.randomize_field,
+      domain_randomization=True,
+      params={
+        "asset_cfg": SceneEntityCfg("object"),
+        "field": "body_ipos",
+        "operation": "add",
+        "ranges": {
+          0: (-0.08, 0.08),
+          1: (-0.08, 0.08),
+          2: (-0.08, 0.08),
+        },
+      },
+    ),
+    "object_inertia": EventTermCfg(
+      mode="startup",
+      func=mdp.randomize_field,
+      domain_randomization=True,
+      params={
+        "asset_cfg": SceneEntityCfg("object"),
+        "field": "body_inertia",
+        "ranges": (0.5, 1.5),
+        "operation": "scale",
+      },
+    ),
+    "object_shape": EventTermCfg(
+      mode="startup",
+      func=mdp.randomize_field,
+      domain_randomization=True,
+      params={
+        "asset_cfg": SceneEntityCfg("object"),
+        "field": "geom_size",
+        "ranges": (0.9, 1.1),
+        "operation": "scale",
+      },
+    ),
   }
 
   rewards: dict[str, RewardTermCfg] = {
@@ -264,6 +312,16 @@ def create_locomanipulation_env_cfg(
       func=mdp.motion_global_body_angular_velocity_error_exp,
       weight=1.0,
       params={"command_name": "motion", "std": 3.14},
+    ),
+    "object_pos": RewardTermCfg(
+      func=mdp.object_global_position_error_exp,
+      weight=0.5,
+      params={"command_name": "motion", "std": 0.3},
+    ),
+    "object_ori": RewardTermCfg(
+      func=mdp.object_global_orientation_error_exp,
+      weight=0.5,
+      params={"command_name": "motion", "std": 0.4},
     ),
     "action_rate_l2": RewardTermCfg(func=mdp.action_rate_l2, weight=-1e-1),
     "joint_limit": RewardTermCfg(

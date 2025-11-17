@@ -247,6 +247,7 @@ FIELD_SPECS = {
   "geom_pos": FieldSpec("geom", default_axes=[0, 1, 2]),
   "geom_quat": FieldSpec("geom", default_axes=[0, 1, 2, 3]),
   "geom_rgba": FieldSpec("geom", default_axes=[0, 1, 2, 3]),
+  "geom_size": FieldSpec("geom", default_axes=[0, 1, 2]),
   # Site - uses IDs directly.
   "site_pos": FieldSpec("site", default_axes=[0, 1, 2]),
   "site_quat": FieldSpec("site", default_axes=[0, 1, 2, 3]),

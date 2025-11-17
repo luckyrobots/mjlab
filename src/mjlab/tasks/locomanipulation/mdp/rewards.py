@@ -113,27 +113,27 @@ def motion_global_body_angular_velocity_error_exp(
   return torch.exp(-error.mean(-1) / std**2)
 
 
-def object_global_link_position_error_exp(
+def object_global_position_error_exp(
   env: ManagerBasedRlEnv,
-  object_name: str,
+  command_name: str,
   std: float,
 ) -> torch.Tensor:
-  motion_object = cast(MotionCommand, env.command_manager.get_term(object_name))
-  object = env.scene[object_name]
+  command = cast(MotionCommand, env.command_manager.get_term(command_name))
+  object = env.scene["object"]
   error = torch.sum(
-    torch.square(motion_object.body_pos_w - object.body_pos_w), dim=-1
+    torch.square(command.object_pos_w - object.data.body_link_pos_w[:, 0]), dim=-1
   )
   return torch.exp(-error / std**2)
 
 
-def object_global_link_orientation_error_exp(
+def object_global_orientation_error_exp(
   env: ManagerBasedRlEnv,
-  object_name: str,
+  command_name: str,
   std: float,
 ) -> torch.Tensor:
-  motion_object = cast(MotionCommand, env.command_manager.get_term(object_name))
-  object = env.scene[object_name]
-  error = quat_error_magnitude(motion_object.body_quat_w, object.body_quat_w) ** 2
+  command = cast(MotionCommand, env.command_manager.get_term(command_name))
+  object = env.scene["object"]
+  error = quat_error_magnitude(command.object_quat_w, object.data.body_link_quat_w[:, 0]) ** 2
   return torch.exp(-error / std**2)
 
 

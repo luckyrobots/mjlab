@@ -163,6 +163,21 @@ def run_play(task: str, cfg: PlayConfig):
             raise RuntimeError("No motion artifact found in the run.")
           motion_cmd.motion_file = str(Path(art.download()) / "motion.npz")
 
+    # If this is a locomanipulation task, infer the object asset from the
+    # resolved motion file path and update the scene entities accordingly.
+    if isinstance(motion_cmd, LocomotionMotionCommandCfg):
+      try:
+        from mjlab.tasks.locomanipulation.config.g1.env_cfgs import (
+          infer_object_cfg_from_motion_file,
+        )
+      except Exception:
+        infer_object_cfg_from_motion_file = None  # type: ignore[assignment]
+
+      if infer_object_cfg_from_motion_file is not None:
+        obj_cfgs = infer_object_cfg_from_motion_file(motion_cmd.motion_file)
+        if obj_cfgs is not None:
+          env_cfg.scene.entities.update(obj_cfgs)
+
   log_dir: Path | None = None
   resume_path: Path | None = None
   if TRAINED_MODE:

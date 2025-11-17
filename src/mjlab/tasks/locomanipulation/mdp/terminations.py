@@ -96,9 +96,8 @@ def bad_object_pos(
 ) -> torch.Tensor:
   command = cast(MotionCommand, env.command_manager.get_term(command_name))
   object = env.scene["object"]
-  import pdb; pdb.set_trace()
   error = torch.norm(command.object_pos_w - object.data.body_link_pos_w[:, 0], dim=-1)
-  return torch.any(error > threshold, dim=-1)
+  return error > threshold
 
 
 def bad_object_ori(
@@ -107,6 +106,6 @@ def bad_object_ori(
   threshold: float,
 ) -> torch.Tensor:
   command = cast(MotionCommand, env.command_manager.get_term(command_name))
-  object = env.scene["object"]
-  error = quat_error_magnitude(command.object_quat_w.squeeze(1), object.data.body_link_quat_w[:, 0])
-  return torch.any(error > threshold, dim=-1)
+  obj = env.scene["object"]
+  error = quat_error_magnitude(command.object_quat_w, obj.data.body_link_quat_w[:, 0])
+  return error > threshold
