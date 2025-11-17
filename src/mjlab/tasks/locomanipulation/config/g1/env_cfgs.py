@@ -1,0 +1,116 @@
+"""Unitree G1 flat terrain locomanipulation configuration.
+
+This module provides factory functions that create complete ManagerBasedRlEnvCfg
+instances for the G1 robot locomanipulation task on flat terrain.
+"""
+
+from pathlib import Path
+import mujoco
+from copy import deepcopy
+
+from mjlab.asset_zoo.robots import (
+  G1_ACTION_SCALE,
+  get_g1_robot_cfg,
+)
+from mjlab.envs import ManagerBasedRlEnvCfg
+from mjlab.sensor import ContactMatch, ContactSensorCfg
+from mjlab.tasks.locomanipulation.locomanipulation_env_cfg import create_locomanipulation_env_cfg
+from mjlab.utils.retval import retval
+from mjlab.entity import EntityCfg
+
+
+def get_object_cfg() -> EntityCfg:
+    def spec_fn() -> mujoco.MjSpec:
+        xml_path = (
+            Path(__file__)
+            .parents[6]
+            / "omniretarget"
+            / "models"
+            / "largebox"
+            / "largebox.xml"
+        )
+        return mujoco.MjSpec.from_file(str(xml_path))
+
+    return EntityCfg(spec_fn=spec_fn)
+
+
+@retval
+def UNITREE_G1_FLAT_LOCOMANIPULATION_ENV_CFG() -> ManagerBasedRlEnvCfg:
+  """Create Unitree G1 flat terrain locomanipulation configuration."""
+  self_collision_cfg = ContactSensorCfg(
+    name="self_collision",
+    primary=ContactMatch(mode="subtree", pattern="pelvis", entity="robot"),
+    secondary=ContactMatch(mode="subtree", pattern="pelvis", entity="robot"),
+    fields=("found",),
+    reduce="none",
+    num_slots=1,
+  )
+
+  """Add interactive object to the environment."""
+  object_cfgs = {
+    "object": get_object_cfg(),
+  }
+
+  return create_locomanipulation_env_cfg(
+    robot_cfg=get_g1_robot_cfg(),
+    action_scale=G1_ACTION_SCALE,
+    viewer_body_name="torso_link",
+    motion_file="",
+    anchor_body_name="torso_link",
+    body_names=(
+      "pelvis",
+      "left_hip_roll_link",
+      "left_knee_link",
+      "left_ankle_roll_link",
+      "right_hip_roll_link",
+      "right_knee_link",
+      "right_ankle_roll_link",
+      "torso_link",
+      "left_shoulder_roll_link",
+      "left_elbow_link",
+      "left_wrist_yaw_link",
+      "right_shoulder_roll_link",
+      "right_elbow_link",
+      "right_wrist_yaw_link",
+    ),
+    ee_body_names=(
+      "left_ankle_roll_link",
+      "right_ankle_roll_link",
+      "left_wrist_yaw_link",
+      "right_wrist_yaw_link",
+    ),
+    base_com_body_name="torso_link",
+    sensors=(self_collision_cfg,),
+    pose_range={
+      "x": (-0.05, 0.05),
+      "y": (-0.05, 0.05),
+      "z": (-0.01, 0.01),
+      "roll": (-0.1, 0.1),
+      "pitch": (-0.1, 0.1),
+      "yaw": (-0.2, 0.2),
+    },
+    velocity_range={
+      "x": (-0.5, 0.5),
+      "y": (-0.5, 0.5),
+      "z": (-0.2, 0.2),
+      "roll": (-0.52, 0.52),
+      "pitch": (-0.52, 0.52),
+      "yaw": (-0.78, 0.78),
+    },
+    joint_position_range=(-0.1, 0.1),
+    objects=object_cfgs,
+  )
+
+
+@retval
+def UNITREE_G1_FLAT_LOCOMANIPULATION_NO_STATE_ESTIMATION_ENV_CFG() -> ManagerBasedRlEnvCfg:
+  """Create Unitree G1 flat terrain locomanipulation config without state estimation.
+
+  This variant disables motion_anchor_pos_b and base_lin_vel observations,
+  simulating the lack of state estimation.
+  """
+  cfg = deepcopy(UNITREE_G1_FLAT_LOCOMANIPULATION_ENV_CFG)
+  assert "policy" in cfg.observations
+  cfg.observations["policy"].terms.pop("motion_anchor_pos_b")
+  cfg.observations["policy"].terms.pop("base_lin_vel")
+  return cfg

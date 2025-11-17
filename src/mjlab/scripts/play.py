@@ -13,8 +13,10 @@ from rsl_rl.runners import OnPolicyRunner
 from mjlab.envs import ManagerBasedRlEnv, ManagerBasedRlEnvCfg
 from mjlab.rl import RslRlVecEnvWrapper
 from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg
-from mjlab.tasks.tracking.mdp import MotionCommandCfg
+from mjlab.tasks.tracking.mdp import MotionCommandCfg as TrackingMotionCommandCfg
+from mjlab.tasks.locomanipulation.mdp import MotionCommandCfg as LocomotionMotionCommandCfg
 from mjlab.tasks.tracking.rl import MotionTrackingOnPolicyRunner
+from mjlab.tasks.locomanipulation.rl import LocomanipulationOnPolicyRunner
 from mjlab.utils.os import get_wandb_checkpoint_path
 from mjlab.utils.torch import configure_torch_backends
 from mjlab.utils.wrappers import VideoRecorder
@@ -77,15 +79,15 @@ def _apply_play_env_overrides(
       terrain_gen.num_rows = 5
       terrain_gen.border_width = 10.0
 
-  # Disable RSI randomization for tracking tasks.
+  # Disable RSI randomization for motion-command tasks (tracking or locomanipulation).
   if cfg.commands is not None and "motion" in cfg.commands:
-    from mjlab.tasks.tracking.mdp import MotionCommandCfg
-
     motion_cmd = cfg.commands["motion"]
-    assert isinstance(motion_cmd, MotionCommandCfg)
-    motion_cmd.pose_range = {}
-    motion_cmd.velocity_range = {}
-    motion_cmd.sampling_mode = motion_command_sampling_mode
+    if isinstance(
+      motion_cmd, (TrackingMotionCommandCfg, LocomotionMotionCommandCfg)
+    ):
+      motion_cmd.pose_range = {}
+      motion_cmd.velocity_range = {}
+      motion_cmd.sampling_mode = motion_command_sampling_mode
 
 
 def run_play(task: str, cfg: PlayConfig):
@@ -101,22 +103,34 @@ def run_play(task: str, cfg: PlayConfig):
   DUMMY_MODE = cfg.agent in {"zero", "random"}
   TRAINED_MODE = not DUMMY_MODE
 
-  # Check if this is a tracking task by checking for motion command.
+  # Check if this env uses a motion command (tracking or locomanipulation).
+  has_motion_command = (
+    env_cfg.commands is not None
+    and "motion" in env_cfg.commands
+    and isinstance(
+      env_cfg.commands["motion"],
+      (TrackingMotionCommandCfg, LocomotionMotionCommandCfg),
+    )
+  )
+
+  # Tracking-specific runner is only used for tracking MotionCommandCfg.
   is_tracking_task = (
     env_cfg.commands is not None
     and "motion" in env_cfg.commands
-    and isinstance(env_cfg.commands["motion"], MotionCommandCfg)
+    and isinstance(env_cfg.commands["motion"], TrackingMotionCommandCfg)
   )
 
-  if is_tracking_task:
+  if has_motion_command:
     assert env_cfg.commands is not None
     motion_cmd = env_cfg.commands["motion"]
-    assert isinstance(motion_cmd, MotionCommandCfg)
+    assert isinstance(
+      motion_cmd, (TrackingMotionCommandCfg, LocomotionMotionCommandCfg)
+    )
 
     if DUMMY_MODE:
       if not cfg.registry_name:
         raise ValueError(
-          "Tracking tasks require `registry_name` when using dummy agents."
+          "Motion-command tasks require `registry_name` when using dummy agents."
         )
       # Check if the registry name includes alias, if not, append ":latest".
       registry_name = cfg.registry_name
@@ -137,7 +151,7 @@ def run_play(task: str, cfg: PlayConfig):
         api = wandb.Api()
         if cfg.wandb_run_path is None and cfg.checkpoint_file is not None:
           raise ValueError(
-            "Tracking tasks require `motion_file` when using `checkpoint_file`, "
+            "Motion-command tasks require `motion_file` when using `checkpoint_file`, "
             "or provide `wandb_run_path` so the motion artifact can be resolved."
           )
         if cfg.wandb_run_path is not None:
@@ -222,6 +236,10 @@ def run_play(task: str, cfg: PlayConfig):
   else:
     if is_tracking_task:
       runner = MotionTrackingOnPolicyRunner(
+        env, asdict(agent_cfg), log_dir=str(log_dir), device=device
+      )
+    elif has_motion_command:
+      runner = LocomanipulationOnPolicyRunner(
         env, asdict(agent_cfg), log_dir=str(log_dir), device=device
       )
     else:

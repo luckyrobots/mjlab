@@ -120,16 +120,31 @@ class MotionLoader:
     return index_0, index_1, blend
 
   def _compute_velocities(self):
-    """Computes the velocities of the motion."""
-    self.motion_base_lin_vels = torch.gradient(
-      self.motion_base_poss, spacing=self.output_dt, dim=0
-    )[0]
-    self.motion_dof_vels = torch.gradient(
-      self.motion_dof_poss, spacing=self.output_dt, dim=0
-    )[0]
-    self.motion_base_ang_vels = self._so3_derivative(
-      self.motion_base_rots, self.output_dt
+    """Computes velocities using backward finite differences to match inference."""
+    # Backward difference: v[i] = (pos[i] - pos[i-1]) / dt
+    self.motion_base_lin_vels = torch.zeros_like(self.motion_base_poss)
+    self.motion_base_lin_vels[1:] = (self.motion_base_poss[1:] - self.motion_base_poss[:-1]) / self.output_dt
+    self.motion_base_lin_vels[0] = self.motion_base_lin_vels[1]
+    
+    # Backward difference: v[i] = (pos[i] - pos[i-1]) / dt
+    self.motion_dof_vels = torch.zeros_like(self.motion_dof_poss)
+    self.motion_dof_vels[1:] = (self.motion_dof_poss[1:] - self.motion_dof_poss[:-1]) / self.output_dt
+    self.motion_dof_vels[0] = self.motion_dof_vels[1]  # Copy first valid velocity
+  
+    
+    # Angular velocity - still use SO3 derivative but with backward difference style
+    self.motion_base_ang_vels = self._so3_derivative_backward(
+        self.motion_base_rots, self.output_dt
     )
+
+  def _so3_derivative_backward(self, rotations: torch.Tensor, dt: float) -> torch.Tensor:
+    """Backward finite difference for SO3."""
+    q_prev, q_curr = rotations[:-1], rotations[1:]
+    q_rel = quat_mul(q_curr, quat_conjugate(q_prev))
+    omega = axis_angle_from_quat(q_rel) / dt
+    # Pad with first velocity
+    omega = torch.cat([omega[:1], omega], dim=0)
+    return omega
 
   def _so3_derivative(self, rotations: torch.Tensor, dt: float) -> torch.Tensor:
     """Computes the derivative of a sequence of SO3 rotations.
@@ -311,7 +326,9 @@ def run_sim(
         import wandb
 
         COLLECTION = output_name
-        run = wandb.init(project="csv_to_npz", name=COLLECTION)
+        run = wandb.init(
+          project="csv_to_npz", name=COLLECTION, entity="mjlab"
+        )
         print(f"[INFO]: Logging motion to wandb: {COLLECTION}")
         REGISTRY = "motions"
         logged_artifact = run.log_artifact(
