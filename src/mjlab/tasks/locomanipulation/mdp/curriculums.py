@@ -17,7 +17,7 @@ def object_termination_curriculum(
     env: ManagerBasedRlEnv,
     env_ids: torch.Tensor,
     stages: list[ObjectTerminationStage],
-) -> torch.Tensor:
+) -> dict[str, float]:
     del env_ids  # unused
 
     # Same TerminationTermCfg objects that were passed in the env cfg
@@ -30,7 +30,7 @@ def object_termination_curriculum(
             term_ori.params["threshold"] = stage["ori_threshold"]
             break
 
-    return torch.tensor(
-        [term_pos.params["threshold"], term_ori.params["threshold"]],
-        device=env.device,
-    )
+    return {
+        "pos_threshold": term_pos.params["threshold"],
+        "ori_threshold": term_ori.params["threshold"],
+    }
