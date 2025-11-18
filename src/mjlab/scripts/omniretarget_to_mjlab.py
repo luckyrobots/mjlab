@@ -1,3 +1,5 @@
+from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -8,7 +10,10 @@ from tqdm import tqdm
 from mjlab.entity import Entity
 from mjlab.scene import Scene
 from mjlab.sim.sim import Simulation, SimulationCfg
-from mjlab.tasks.locomanipulation.config.g1.env_cfgs import UNITREE_G1_FLAT_LOCOMANIPULATION_ENV_CFG
+from mjlab.tasks.locomanipulation.config.g1.env_cfgs import (
+    UNITREE_G1_FLAT_LOCOMANIPULATION_ENV_CFG,
+    infer_object_cfg_from_motion_file,
+)
 from mjlab.third_party.isaaclab.isaaclab.utils.math import (
     axis_angle_from_quat,
     quat_conjugate,
@@ -251,7 +256,8 @@ def run_sim(
     joint_names,
     input_file,
     output_fps,
-    output_name,
+    output_name: str | None,
+    output_path: str | None,
     render,
     frame_range,
     renderer: OffscreenRenderer | None = None,
@@ -407,44 +413,84 @@ def run_sim(
                 for k in keys_to_stack:
                     log[k] = np.stack(log[k], axis=0)
 
-                print("Saving to /tmp/motion.npz...")
-                np.savez("/tmp/motion.npz", **log)  # type: ignore[arg-type]
+                # If an explicit output path is provided, save there (new behavior).
+                # Otherwise, fall back to the original behavior: save to /tmp/motion.npz
+                # and upload to WandB using the provided output_name.
+                if output_path is not None:
+                    # Interpret ``output_path`` as:
+                    #   - a *file path* if it has a suffix (e.g. "artifacts/foo.npz"), or
+                    #   - a *directory* if it has no suffix (e.g. "artifacts/").
+                    input_path = Path(input_file)
+                    out_path = Path(output_path)
 
-                print("Uploading to Weights & Biases...")
-                import wandb
+                    if out_path.suffix == "" or out_path.is_dir():
+                        # Directory-like: place file next to input name under this directory.
+                        output_path_obj = out_path / input_path.name
+                    else:
+                        # File-like: honor the path exactly as given.
+                        output_path_obj = out_path
 
-                COLLECTION = output_name
-                run = wandb.init(
-                    project="omniretarget_to_mjlab", name=COLLECTION, entity="mjlab"
-                )
-                print(f"[INFO]: Logging motion to wandb: {COLLECTION}")
-                REGISTRY = "motions"
-                logged_artifact = run.log_artifact(
-                    artifact_or_path="/tmp/motion.npz", name=COLLECTION, type=REGISTRY
-                )
-                run.link_artifact(
-                    artifact=logged_artifact,
-                    target_path=f"wandb-registry-{REGISTRY}/{COLLECTION}",
-                )
-                print(f"[INFO]: Motion saved to wandb registry: {REGISTRY}/{COLLECTION}")
+                    output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+                    print(f"Saving converted motion to {output_path_obj}...")
+                    np.savez(output_path_obj, **log)
 
-                if render:
-                    from moviepy import ImageSequenceClip
+                    if render:
+                        from moviepy import ImageSequenceClip
 
-                    print("Creating video...")
-                    clip = ImageSequenceClip(frames, fps=output_fps)
-                    clip.write_videofile("./motion.mp4")
+                        print("Creating video...")
+                        clip = ImageSequenceClip(frames, fps=output_fps)
+                        clip.write_videofile(str(output_path_obj.with_suffix(".mp4")))
+                else:
+                    print("Saving to /tmp/motion.npz...")
+                    np.savez("/tmp/motion.npz", **log)  # type: ignore[arg-type]
 
-                    print("Logging video to wandb...")
-                    wandb.log({"motion_video": wandb.Video("./motion.mp4", format="mp4")})
+                    if output_name is None:
+                        raise ValueError(
+                            "output_name must be provided when output_path is not set."
+                        )
 
-                wandb.finish()
+                    print("Uploading to Weights & Biases...")
+                    import wandb
+
+                    COLLECTION = output_name
+                    run = wandb.init(
+                        project="omniretarget_to_mjlab",
+                        name=COLLECTION,
+                        entity="mjlab",
+                    )
+                    print(f"[INFO]: Logging motion to wandb: {COLLECTION}")
+                    REGISTRY = "motions"
+                    logged_artifact = run.log_artifact(
+                        artifact_or_path="/tmp/motion.npz",
+                        name=COLLECTION,
+                        type=REGISTRY,
+                    )
+                    run.link_artifact(
+                        artifact=logged_artifact,
+                        target_path=f"wandb-registry-{REGISTRY}/{COLLECTION}",
+                    )
+                    print(
+                        f"[INFO]: Motion saved to wandb registry: {REGISTRY}/{COLLECTION}"
+                    )
+
+                    if render:
+                        from moviepy import ImageSequenceClip
+
+                        print("Creating video...")
+                        clip = ImageSequenceClip(frames, fps=output_fps)
+                        clip.write_videofile("./motion.mp4")
+
+                        print("Logging video to wandb...")
+                        wandb.log({"motion_video": wandb.Video("./motion.mp4", format="mp4")})
+
+                    wandb.finish()
 
 
 def main(
     input_file: str,
-    output_name: str,
-    output_fps: float = 50.0,
+    output_name: str | None = None,
+    output_path: str | None = None,
+    output_fps: float = 30.0,
     device: str = "cuda:0",
     render: bool = False,
     frame_range: tuple[int, int] | None = None,
@@ -453,7 +499,11 @@ def main(
 
     Args:
         input_file: Path to the input npz file (OmniRetarget format with 'qpos' and 'fps' keys).
-        output_name: Name for the output (used in wandb).
+        output_name: Optional name for the output when using the original WandB
+            upload behavior. If ``output_path`` is not provided, this must be set.
+        output_path: Optional path to save the converted mjlab motion. When
+            provided, the script will skip WandB upload and simply write the
+            converted npz (and optional video) to this path.
         output_fps: Desired output frame rate.
         device: Device to use.
         render: Whether to render the simulation and save a video.
@@ -462,7 +512,15 @@ def main(
     sim_cfg = SimulationCfg()
     sim_cfg.mujoco.timestep = 1.0 / output_fps
 
-    scene = Scene(UNITREE_G1_FLAT_LOCOMANIPULATION_ENV_CFG.scene, device=device)
+    # Start from the default locomanipulation scene and, if possible, augment
+    # it with an interactive object inferred from the motion filename.
+    base_env_cfg = UNITREE_G1_FLAT_LOCOMANIPULATION_ENV_CFG
+    scene_cfg = deepcopy(base_env_cfg.scene)
+    inferred_objects = infer_object_cfg_from_motion_file(input_file)
+    if inferred_objects is not None:
+        scene_cfg.entities.update(inferred_objects)
+
+    scene = Scene(scene_cfg, device=device)
     model = scene.compile()
 
     sim = Simulation(num_envs=1, cfg=sim_cfg, model=model, device=device)
@@ -523,6 +581,7 @@ def main(
         input_file=input_file,
         output_fps=output_fps,
         output_name=output_name,
+        output_path=str(output_path) if output_path is not None else None,
         render=render,
         frame_range=frame_range,
         renderer=renderer,

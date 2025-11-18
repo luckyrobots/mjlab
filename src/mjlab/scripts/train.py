@@ -11,8 +11,10 @@ import tyro
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.rl import RslRlOnPolicyRunnerCfg, RslRlVecEnvWrapper
 from mjlab.tasks.registry import list_tasks, load_env_cfg, load_rl_cfg
-from mjlab.tasks.tracking.mdp import MotionCommandCfg
+from mjlab.tasks.tracking.mdp import MotionCommandCfg as TrackingMotionCommandCfg
+from mjlab.tasks.locomanipulation.mdp import MotionCommandCfg as LocomotionMotionCommandCfg
 from mjlab.tasks.tracking.rl import MotionTrackingOnPolicyRunner
+from mjlab.tasks.locomanipulation.rl import LocomanipulationOnPolicyRunner
 from mjlab.tasks.velocity.rl import VelocityOnPolicyRunner
 from mjlab.utils.os import dump_yaml, get_checkpoint_path
 from mjlab.utils.torch import configure_torch_backends
@@ -24,6 +26,7 @@ class TrainConfig:
   env: Any
   agent: RslRlOnPolicyRunnerCfg
   registry_name: str | None = None
+  motion_file: str | None = None
   device: str = "cuda:0"
   video: bool = False
   video_length: int = 200
@@ -36,11 +39,18 @@ def run_train(cfg: TrainConfig) -> None:
 
   registry_name: str | None = None
 
-  # Check if this is a tracking task by checking for motion command.
+  # Check if this env uses a motion command, and whether it is a tracking or
+  # locomanipulation-style motion command (mirrors `play.py`).
+  has_motion_command = (
+    cfg.env.commands is not None and "motion" in cfg.env.commands
+  )
   is_tracking_task = (
-    cfg.env.commands is not None
-    and "motion" in cfg.env.commands
-    and isinstance(cfg.env.commands["motion"], MotionCommandCfg)
+    has_motion_command
+    and isinstance(cfg.env.commands["motion"], TrackingMotionCommandCfg)
+  )
+  is_locomanipulation_task = (
+    has_motion_command
+    and isinstance(cfg.env.commands["motion"], LocomotionMotionCommandCfg)
   )
 
   if is_tracking_task:
@@ -58,8 +68,39 @@ def run_train(cfg: TrainConfig) -> None:
 
     assert cfg.env.commands is not None
     motion_cmd = cfg.env.commands["motion"]
-    assert isinstance(motion_cmd, MotionCommandCfg)
+    assert isinstance(motion_cmd, TrackingMotionCommandCfg)
     motion_cmd.motion_file = str(Path(artifact.download()) / "motion.npz")
+
+  # For non-tracking tasks that still use a "motion" command term (e.g.,
+  # locomanipulation), allow overriding the motion source via --motion-file.
+  # This can be either a single .npz file or a directory of .npz files; the
+  # MotionCommand implementation for that task is responsible for handling
+  # directories as multi-motion datasets.
+  if (not is_tracking_task) and cfg.motion_file is not None:
+    if not has_motion_command:
+      raise ValueError(
+        "`--motion-file` was provided but the selected task has no 'motion' command."
+      )
+    assert cfg.env.commands is not None
+    motion_cmd = cfg.env.commands["motion"]
+    motion_cmd.motion_file = cfg.motion_file
+
+    # For locomanipulation-style motion-command tasks, infer the interactive
+    # object/terrain asset from the motion file name and add it to the scene
+    # *before* constructing the environment, so object-based rewards and
+    # terminations are active.
+    if is_locomanipulation_task:
+      try:
+        from mjlab.tasks.locomanipulation.config.g1.env_cfgs import (
+          infer_object_cfg_from_motion_file,
+        )
+      except Exception:
+        infer_object_cfg_from_motion_file = None
+
+      if infer_object_cfg_from_motion_file is not None:
+        obj_cfgs = infer_object_cfg_from_motion_file(motion_cmd.motion_file)
+        if obj_cfgs is not None:
+          cfg.env.scene.entities.update(obj_cfgs)
 
   # Enable NaN guard if requested.
   if cfg.enable_nan_guard:
@@ -103,6 +144,10 @@ def run_train(cfg: TrainConfig) -> None:
   if is_tracking_task:
     runner = MotionTrackingOnPolicyRunner(
       env, agent_cfg, str(log_dir), cfg.device, registry_name
+    )
+  elif is_locomanipulation_task:
+    runner = LocomanipulationOnPolicyRunner(
+      env, agent_cfg, str(log_dir), cfg.device
     )
   else:
     runner = VelocityOnPolicyRunner(env, agent_cfg, str(log_dir), cfg.device)

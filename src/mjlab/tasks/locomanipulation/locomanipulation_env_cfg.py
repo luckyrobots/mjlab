@@ -91,6 +91,7 @@ def create_locomanipulation_env_cfg(
     pose_range: Position/orientation randomization ranges.
     velocity_range: Velocity randomization ranges.
     joint_position_range: Joint position randomization range.
+    objects: Dictionary of object entities to add to the scene.
 
   Returns:
     Complete ManagerBasedRlEnvCfg for locomanipulation task.
@@ -313,16 +314,6 @@ def create_locomanipulation_env_cfg(
       weight=1.0,
       params={"command_name": "motion", "std": 3.14},
     ),
-    "object_pos": RewardTermCfg(
-      func=mdp.object_global_position_error_exp,
-      weight=0.5,
-      params={"command_name": "motion", "std": 0.3},
-    ),
-    "object_ori": RewardTermCfg(
-      func=mdp.object_global_orientation_error_exp,
-      weight=0.5,
-      params={"command_name": "motion", "std": 0.4},
-    ),
     "action_rate_l2": RewardTermCfg(func=mdp.action_rate_l2, weight=-1e-1),
     "joint_limit": RewardTermCfg(
       func=mdp.joint_pos_limits,
@@ -333,6 +324,16 @@ def create_locomanipulation_env_cfg(
       func=mdp.self_collision_cost,
       weight=-10.0,
       params={"sensor_name": "self_collision"},
+    ),
+    "object_pos": RewardTermCfg(
+      func=mdp.object_global_position_error_exp,
+      weight=0.5,
+      params={"command_name": "motion", "std": 0.3},
+    ),
+    "object_ori": RewardTermCfg(
+      func=mdp.object_global_orientation_error_exp,
+      weight=0.5,
+      params={"command_name": "motion", "std": 0.4},
     ),
   }
 

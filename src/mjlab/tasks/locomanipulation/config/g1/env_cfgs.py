@@ -20,82 +20,58 @@ from mjlab.entity import EntityCfg
 
 
 def infer_object_cfg_from_motion_file(motion_file: str) -> dict[str, EntityCfg] | None:
-  """Infer interactive asset (largebox / chair / climb terrain) from the motion name.
+  """Infer object configuration from motion file or directory.
 
-  This mirrors the naming conventions used in `omniretarget/visualize.py`:
-  - robot-object:      `sub*_largebox_...`                 → `models/largebox/largebox.xml`
-  - robot-object-terr: `scene_*_chair_scaled_*.npz`        → `models/chair/chair_scaled_*.xml`
-  - robot-object-terr: `scene_*_original.npz`              → `models/chair/chair.xml`
-  - robot-terrain:     `climb_XX_z_scale_Y.npz`            → `models/terrain/climb_XX/multi_boxes_z_scale_Y.xml`
+  Follows OmniRetarget artifact naming conventions:
+    - robot-object:      sub*_largebox_*        → largebox/largebox.xml
+    - robot-object-terr: scene_*_chair_scaled_* → chair/chair_scaled_*.xml
+    - robot-object-terr: scene_*_original       → chair/chair.xml
+    - robot-terrain:     climb_XX_z_scale_Y     → terrain/climb_XX/multi_boxes_z_scale_Y.xml
+
+  Args:
+    motion_file: Path to .npz file or directory containing .npz files
   """
   path = Path(motion_file)
-  candidate = path.parent.name or path.stem
-  # Strip optional WandB alias suffix, e.g. "sub3_largebox_000_original:v0"
-  candidate = candidate.split(":", 1)[0]
-
   base_models_dir = Path(__file__).parents[6] / "omniretarget" / "models"
 
-  # Large box motions (robot-object scenes).
-  if "largebox" in candidate:
-    xml_path = base_models_dir / "largebox" / "largebox.xml"
+  # If directory provided, use first .npz file for inference
+  if path.is_dir():
+    npz_files = sorted(path.glob("*.npz"))
+    if not npz_files:
+      return None
+    path = npz_files[0]
 
-    def spec_fn(xml_path=xml_path) -> mujoco.MjSpec:
-      return mujoco.MjSpec.from_file(str(xml_path))
+  # Extract filename stem, removing extension and WandB suffix (e.g., ":v0")
+  stem = path.stem.split(":", 1)[0]
 
-    return {"object": EntityCfg(spec_fn=spec_fn)}
+  def create_entity(xml_path: Path) -> dict[str, EntityCfg]:
+    """Helper to create EntityCfg from XML path."""
+    return {"object": EntityCfg(spec_fn=lambda p=xml_path: mujoco.MjSpec.from_file(str(p)))}
 
-  # Chair motions (robot-object-terrain scenes).
-  if "chair" in candidate or ("scene_" in candidate and "original" in candidate):
-    chair_dir = base_models_dir / "chair"
+  # Pattern matching: largebox
+  if "largebox" in stem:
+    return create_entity(base_models_dir / "largebox" / "largebox.xml")
 
-    # Scaled chair: extract "chair_scaled_X.Y" from the filename.
-    if "chair_scaled_" in candidate:
-      start = candidate.index("chair_scaled_")
-      # Everything after "chair_scaled_...", up to "_z_scale" if present.
-      rest = candidate[start:]
-      end = rest.find("_z_scale")
-      if end != -1:
-        scale_tag = rest[:end]
-      else:
-        scale_tag = rest
+  # Pattern matching: chair (scaled or default)
+  if "chair" in stem or ("scene_" in stem and "original" in stem):
+    xml_name = "chair.xml"  # default
+    
+    if "chair_scaled_" in stem:
+      start = stem.index("chair_scaled_")
+      rest = stem[start:]
+      end_idx = rest.find("_z_scale")
+      scale_tag = rest[:end_idx] if end_idx != -1 else rest
       xml_name = f"{scale_tag}.xml"
-    else:
-      # "scene_XX_original" → default chair.xml
-      xml_name = "chair.xml"
+    
+    return create_entity(base_models_dir / "chair" / xml_name)
 
-    xml_path = chair_dir / xml_name
+  # Pattern matching: climb terrain
+  if stem.startswith("climb_"):
+    climb_id = stem[:8]  # e.g., "climb_08"
+    z_tag = stem[stem.index("_z_scale"):] if "_z_scale" in stem else "_z_scale_1.0"
+    xml_path = base_models_dir / "terrain" / climb_id / f"multi_boxes{z_tag}.xml"
+    return create_entity(xml_path)
 
-    def spec_fn(xml_path=xml_path) -> mujoco.MjSpec:
-      return mujoco.MjSpec.from_file(str(xml_path))
-
-    return {"object": EntityCfg(spec_fn=spec_fn)}
-
-  # Climb motions (robot-terrain scenes).
-  if candidate.startswith("climb_"):
-    # Example: "climb_08_z_scale_1.1"
-    # - terrain folder is "models/terrain/climb_08"
-    # - xml is       "multi_boxes_z_scale_1.1.xml"
-    climb_id = candidate[:8]  # "climb_08"
-    z_tag: str
-    if "_z_scale" in candidate:
-      idx = candidate.index("_z_scale")
-      z_tag = candidate[idx:]  # "_z_scale_1.1"
-    else:
-      z_tag = "_z_scale_1.0"
-
-    xml_path = (
-      base_models_dir
-      / "terrain"
-      / climb_id
-      / f"multi_boxes{z_tag}.xml"
-    )
-
-    def spec_fn(xml_path=xml_path) -> mujoco.MjSpec:
-      return mujoco.MjSpec.from_file(str(xml_path))
-
-    return {"object": EntityCfg(spec_fn=spec_fn)}
-
-  # No recognized object for this motion.
   return None
 
 

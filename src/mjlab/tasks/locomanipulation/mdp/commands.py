@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 import mujoco
@@ -74,6 +75,55 @@ class MotionLoader:
     return self._body_ang_vel_w[:, self._body_indexes]
 
 
+class MultiMotionLoader:
+  """Concatenate multiple motions into a single long trajectory.
+
+  This enables training a single policy over a set of related motions (e.g.,
+  all largebox sequences). Sampling logic in `MotionCommand` remains unchanged
+  and operates over the unified timeline.
+  """
+
+  def __init__(
+    self, motion_files: list[str], body_indexes: torch.Tensor, device: str = "cpu"
+  ) -> None:
+    if len(motion_files) == 0:
+      raise ValueError("MultiMotionLoader requires at least one motion file.")
+
+    # Load each motion independently.
+    loaders = [
+      MotionLoader(motion_file=mf, body_indexes=body_indexes, device=device)
+      for mf in motion_files
+    ]
+
+    self.joint_pos = torch.cat([m.joint_pos for m in loaders], dim=0)
+    self.joint_vel = torch.cat([m.joint_vel for m in loaders], dim=0)
+    self.object_pos_w = torch.cat([m.object_pos_w for m in loaders], dim=0)
+    self.object_quat_w = torch.cat([m.object_quat_w for m in loaders], dim=0)
+    self._body_pos_w = torch.cat([m._body_pos_w for m in loaders], dim=0)
+    self._body_quat_w = torch.cat([m._body_quat_w for m in loaders], dim=0)
+    self._body_lin_vel_w = torch.cat([m._body_lin_vel_w for m in loaders], dim=0)
+    self._body_ang_vel_w = torch.cat([m._body_ang_vel_w for m in loaders], dim=0)
+
+    self._body_indexes = body_indexes
+    self.time_step_total = self.joint_pos.shape[0]
+
+  @property
+  def body_pos_w(self) -> torch.Tensor:
+    return self._body_pos_w[:, self._body_indexes]
+
+  @property
+  def body_quat_w(self) -> torch.Tensor:
+    return self._body_quat_w[:, self._body_indexes]
+
+  @property
+  def body_lin_vel_w(self) -> torch.Tensor:
+    return self._body_lin_vel_w[:, self._body_indexes]
+
+  @property
+  def body_ang_vel_w(self) -> torch.Tensor:
+    return self._body_ang_vel_w[:, self._body_indexes]
+
+
 class MotionCommand(CommandTerm):
   cfg: MotionCommandCfg
   _env: ManagerBasedRlEnv
@@ -98,9 +148,30 @@ class MotionCommand(CommandTerm):
       device=self.device,
     )
 
-    self.motion = MotionLoader(
-      self.cfg.motion_file, self.body_indexes, device=self.device
-    )
+    # Resolve motion sources from `motion_file` only:
+    # - If it points to a directory, load all *.npz in it as a multi-motion.
+    # - Else treat it as a single motion file.
+    motion_path = Path(self.cfg.motion_file)
+    if motion_path.is_dir():
+      motion_files = sorted(str(p) for p in motion_path.glob("*.npz") if p.is_file())
+      if not motion_files:
+        raise ValueError(
+          f"MotionCommand: directory '{motion_path}' contains no .npz motion files."
+        )
+      if len(motion_files) == 1:
+        self.motion = MotionLoader(
+          motion_files[0], self.body_indexes, device=self.device
+        )
+      else:
+        self.motion = MultiMotionLoader(
+          motion_files=motion_files,
+          body_indexes=self.body_indexes,
+          device=self.device,
+        )
+    else:
+      self.motion = MotionLoader(
+        self.cfg.motion_file, self.body_indexes, device=self.device
+      )
     self.time_steps = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
     self.body_pos_relative_w = torch.zeros(
       self.num_envs, len(cfg.body_names), 3, device=self.device
