@@ -119,16 +119,16 @@ uv run play Mjlab-Tracking-Flat-Unitree-G1 --wandb-run-path your-org/mjlab/run-i
 
 Train a Unitree G1 on [OmniRetarget](https://omniretarget.github.io/) loco-manipulation motions.
 
-- **Download the OmniRetarget dataset into `omniretarget/`:**
+1. **Download the OmniRetarget dataset:**
 
 ```bash
 git lfs install
-git clone https://huggingface.co/datasets/omniretarget/OmniRetarget_Dataset omniretarget
+git clone https://huggingface.co/datasets/omniretarget/OmniRetarget_Dataset
 ```
 
-- **Convert URDF/SDF assets to MuJoCo MJCF (`.xml`) using `urdf2mjcf` (required):**
+2. **Convert URDF/SDF assets to MuJoCo MJCF (`.xml`) using `urdf2mjcf` (required):**
 
-The OmniRetarget dataset ships URDF/SDF models under `omniretarget/models/`.  
+The OmniRetarget dataset ships URDF/SDF models under `OmniRetarget_Dataset/models/`.  
 Running [`luckyrobots/urdf2mjcf`](https://github.com/luckyrobots/urdf2mjcf)'s batch converter in-place will generate matching `.xml` MJCF files next to each URDF/SDF; the locomanipulation task then uses `infer_object_cfg_from_motion_file` to automatically pick the correct MJCF asset based on each motion filename.
 
 ```bash
@@ -137,10 +137,10 @@ cd urdf2mjcf
 pip install -e .
 
 # Convert all *.urdf files under the OmniRetarget models directory to *.xml.
-./batch_convert_urdf.sh ../omniretarget/models
+./batch_convert_urdf.sh ../OmniRetarget_Dataset/models
 ```
 
-- **Convert OmniRetarget motions to mjlab format:**
+3. **Convert OmniRetarget motions to mjlab format:**
 
 This converts all `robot-object` trajectories to mjlab’s motion format; repeat for `robot-terrain/` and `robot-object-terrain/` if desired. Converting the full `robot-object` split typically takes **2–3 hours** end-to-end, depending on hardware.
 
