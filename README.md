@@ -115,9 +115,9 @@ uv run play Mjlab-Tracking-Flat-Unitree-G1 --wandb-run-path your-org/mjlab/run-i
 
 ---
 
-### 3. Locomanipulation with OmniRetarget (Loco-Manip)
+### 3. Locomanipulation with OmniRetarget
 
-Train a Unitree G1 on OmniRetarget loco-manipulation motions (robot–object, terrain, or both).
+Train a Unitree G1 on [OmniRetarget](https://omniretarget.github.io/) loco-manipulation motions.
 
 - **Download the OmniRetarget dataset into `omniretarget/`:**
 
@@ -128,8 +128,8 @@ git clone https://huggingface.co/datasets/omniretarget/OmniRetarget_Dataset omni
 
 - **Convert URDF/SDF assets to MuJoCo MJCF (`.xml`) using `urdf2mjcf` (required):**
 
-The locomanipulation task infers object/terrain assets from motion filenames and expects MuJoCo XMLs under `omniretarget/models/` (see `infer_object_cfg_from_motion_file`).  
-Use [`luckyrobots/urdf2mjcf`](https://github.com/luckyrobots/urdf2mjcf) (docs: [`https://docs.kscale.dev/docs/urdf2mjcf`](https://docs.kscale.dev/docs/urdf2mjcf)) to batch-convert all URDFs in-place:
+The OmniRetarget dataset ships URDF/SDF models under `omniretarget/models/`.  
+Running [`luckyrobots/urdf2mjcf`](https://github.com/luckyrobots/urdf2mjcf)'s batch converter in-place will generate matching `.xml` MJCF files next to each URDF/SDF; the locomanipulation task then uses `infer_object_cfg_from_motion_file` to automatically pick the correct MJCF asset based on each motion filename.
 
 ```bash
 git clone https://github.com/luckyrobots/urdf2mjcf.git
@@ -142,7 +142,7 @@ pip install -e .
 
 - **Convert OmniRetarget motions to mjlab format:**
 
-This converts all `robot-object` trajectories to mjlab’s motion format; repeat for `robot-terrain/` and `robot-object-terrain/` if desired.
+This converts all `robot-object` trajectories to mjlab’s motion format; repeat for `robot-terrain/` and `robot-object-terrain/` if desired. Converting the full `robot-object` split typically takes **2–3 hours** end-to-end, depending on hardware.
 
 ```bash
 mkdir -p artifacts/robot-object
@@ -155,7 +155,7 @@ for f in omniretarget/robot-object/*.npz; do
 done
 ```
 
-- **Train the locomanipulation policy:**
+#### Train and Play
 
 ```bash
 MUJOCO_GL=egl uv run train Mjlab-Locomanipulation-Flat-Unitree-G1 \
@@ -164,6 +164,15 @@ MUJOCO_GL=egl uv run train Mjlab-Locomanipulation-Flat-Unitree-G1 \
 ```
 
 `--motion-file` can point to a single converted `.npz` or a directory of motions; the environment will infer interactive objects/terrains from filenames and apply the locomanipulation rewards, terminations, and curriculum.
+
+
+```bash
+uv run play Mjlab-Locomanipulation-Flat-Unitree-G1 \
+  --motion-file artifacts/robot-object \
+  --checkpoint-file path/to/checkpoint.pt
+```
+
+When using `play`, `--motion-file` should match the converted OmniRetarget motions (file or directory), and `--checkpoint-file` should point to a checkpoint produced by the corresponding `train` run under `logs/rsl_rl/g1_locomanipulation/…`.
 
 ---
 
