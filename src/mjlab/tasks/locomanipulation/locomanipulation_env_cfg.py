@@ -5,6 +5,7 @@ Robot-specific configurations are located in the config/ directory.
 
 This is a re-implementation of OmniRetarget (https://omniretarget.github.io/).
 """
+import math
 
 from copy import deepcopy
 
@@ -19,6 +20,7 @@ from mjlab.managers.manager_term_config import (
   ObservationTermCfg,
   RewardTermCfg,
   TerminationTermCfg,
+  CurriculumTermCfg,
 )
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.scene import SceneCfg
@@ -58,6 +60,12 @@ SIM_CFG = SimulationCfg(
     iterations=10,
     ls_iterations=20,
   ),
+)
+
+EPISODE_LENGTH_S = 10.0
+DECIMATION = 4
+EPISODE_STEPS = math.ceil(
+  EPISODE_LENGTH_S / (SIM_CFG.mujoco.timestep * DECIMATION)
 )
 
 
@@ -369,6 +377,20 @@ def create_locomanipulation_env_cfg(
     ),
   }
 
+  curriculum = {
+      "object_terminations": CurriculumTermCfg(
+          func=mdp.object_termination_curriculum,
+          params={
+              "stages": [
+                  {"step": 0, "pos_threshold": 1e6, "ori_threshold": 1e6},
+                  {"step": 3_000 * EPISODE_STEPS, "pos_threshold": 2.0, "ori_threshold": 1.57},
+                  {"step": 6_000 * EPISODE_STEPS, "pos_threshold": 1.5, "ori_threshold": 1.2},
+                  {"step": 10_000 * EPISODE_STEPS, "pos_threshold": 1.0, "ori_threshold": 0.8},
+              ]
+          },
+      ),
+  }
+
   return ManagerBasedRlEnvCfg(
     scene=scene,
     observations=observations,
@@ -376,9 +398,10 @@ def create_locomanipulation_env_cfg(
     commands=commands,
     rewards=rewards,
     terminations=terminations,
+    curriculum=curriculum,
     events=events,
     sim=SIM_CFG,
     viewer=viewer,
-    decimation=4,
-    episode_length_s=10.0,
+    decimation=DECIMATION,
+    episode_length_s=EPISODE_LENGTH_S,
   )

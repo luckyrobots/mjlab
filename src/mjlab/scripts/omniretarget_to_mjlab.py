@@ -411,7 +411,7 @@ def run_sim(
                     ])
                 
                 for k in keys_to_stack:
-                    log[k] = np.stack(log[k], axis=0)
+                    log[k] = np.stack(log[k], axis=0)  # pyright: ignore[reportCallIssue]
 
                 # If an explicit output path is provided, save there (new behavior).
                 # Otherwise, fall back to the original behavior: save to /tmp/motion.npz
@@ -490,7 +490,7 @@ def main(
     input_file: str,
     output_name: str | None = None,
     output_path: str | None = None,
-    output_fps: float = 30.0,
+    output_fps: float = 50.0,
     device: str = "cuda:0",
     render: bool = False,
     frame_range: tuple[int, int] | None = None,
