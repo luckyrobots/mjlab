@@ -5,6 +5,7 @@ Robot-specific configurations are located in the config/ directory.
 
 This is a re-implementation of OmniRetarget (https://omniretarget.github.io/).
 """
+
 import math
 
 from copy import deepcopy
@@ -383,9 +384,10 @@ def create_locomanipulation_env_cfg(
           params={
               "stages": [
                   {"step": 0, "pos_threshold": 1e6, "ori_threshold": 1e6},
-                  {"step": 3_000 * EPISODE_STEPS, "pos_threshold": 2.0, "ori_threshold": 1.57},
-                  {"step": 6_000 * EPISODE_STEPS, "pos_threshold": 1.5, "ori_threshold": 1.2},
-                  {"step": 10_000 * EPISODE_STEPS, "pos_threshold": 1.0, "ori_threshold": 0.8},
+                  {"step": 3_000 * EPISODE_STEPS, "pos_threshold": 2.5, "ori_threshold": 2.0},
+                  {"step": 6_000 * EPISODE_STEPS, "pos_threshold": 2.0, "ori_threshold": 1.57},
+                  {"step": 10_000 * EPISODE_STEPS, "pos_threshold": 1.5, "ori_threshold": 1.2},
+                  {"step": 15_000 * EPISODE_STEPS, "pos_threshold": 1.0, "ori_threshold": 0.8},
               ]
           },
       ),

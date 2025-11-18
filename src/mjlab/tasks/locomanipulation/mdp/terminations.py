@@ -96,7 +96,11 @@ def bad_object_pos(
 ) -> torch.Tensor:
   command = cast(MotionCommand, env.command_manager.get_term(command_name))
   object = env.scene["object"]
-  error = torch.norm(command.object_pos_w - object.data.body_link_pos_w[:, 0], dim=-1)
+  error = torch.norm(
+    command.object_pos_w
+     - object.data.body_link_pos_w[:, 0],
+    dim=-1
+  )
   return error > threshold
 
 

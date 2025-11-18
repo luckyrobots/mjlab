@@ -24,10 +24,11 @@ def object_termination_curriculum(
     term_pos = env.termination_manager.cfg["object_pos"]
     term_ori = env.termination_manager.cfg["object_ori"]
 
-    for stage in stages:
+    for stage in reversed(stages):
         if env.common_step_counter > stage["step"]:
             term_pos.params["threshold"] = stage["pos_threshold"]
             term_ori.params["threshold"] = stage["ori_threshold"]
+            break
 
     return torch.tensor(
         [term_pos.params["threshold"], term_ori.params["threshold"]],
