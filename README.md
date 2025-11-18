@@ -115,7 +115,59 @@ uv run play Mjlab-Tracking-Flat-Unitree-G1 --wandb-run-path your-org/mjlab/run-i
 
 ---
 
-### 3. Sanity-check with Dummy Agents
+### 3. Locomanipulation with OmniRetarget (Loco-Manip)
+
+Train a Unitree G1 on OmniRetarget loco-manipulation motions (robot–object, terrain, or both).
+
+- **Download the OmniRetarget dataset into `omniretarget/`:**
+
+```bash
+git lfs install
+git clone https://huggingface.co/datasets/omniretarget/OmniRetarget_Dataset omniretarget
+```
+
+- **Convert URDF/SDF assets to MuJoCo MJCF (`.xml`) using `urdf2mjcf` (required):**
+
+The locomanipulation task infers object/terrain assets from motion filenames and expects MuJoCo XMLs under `omniretarget/models/` (see `infer_object_cfg_from_motion_file`).  
+Use [`luckyrobots/urdf2mjcf`](https://github.com/luckyrobots/urdf2mjcf) (docs: [`https://docs.kscale.dev/docs/urdf2mjcf`](https://docs.kscale.dev/docs/urdf2mjcf)) to batch-convert all URDFs in-place:
+
+```bash
+git clone https://github.com/luckyrobots/urdf2mjcf.git
+cd urdf2mjcf
+pip install -e .
+
+# Convert all *.urdf files under the OmniRetarget models directory to *.xml.
+./batch_convert_urdf.sh ../omniretarget/models
+```
+
+- **Convert OmniRetarget motions to mjlab format:**
+
+This converts all `robot-object` trajectories to mjlab’s motion format; repeat for `robot-terrain/` and `robot-object-terrain/` if desired.
+
+```bash
+mkdir -p artifacts/robot-object
+
+for f in omniretarget/robot-object/*.npz; do
+  uv run src/mjlab/scripts/omniretarget_to_mjlab.py \
+    --input-file "$f" \
+    --output-path artifacts/robot-object \
+    --output-fps 50
+done
+```
+
+- **Train the locomanipulation policy:**
+
+```bash
+MUJOCO_GL=egl uv run train Mjlab-Locomanipulation-Flat-Unitree-G1 \
+  --motion-file artifacts/robot-object \
+  --env.scene.num-envs 4096
+```
+
+`--motion-file` can point to a single converted `.npz` or a directory of motions; the environment will infer interactive objects/terrains from filenames and apply the locomanipulation rewards, terminations, and curriculum.
+
+---
+
+### 4. Sanity-check with Dummy Agents
 
 Use built-in agents to sanity check your MDP **before** training.
 
