@@ -5,7 +5,7 @@ from mjlab.rl.exporter_utils import (
   attach_metadata_to_onnx,
   get_base_metadata,
 )
-from mjlab.third_party.isaaclab.isaaclab_rl.rsl_rl.exporter import _OnnxPolicyExporter
+from mjlab.utils.lab_api.rl.exporter import _OnnxPolicyExporter
 
 
 def export_velocity_policy_as_onnx(

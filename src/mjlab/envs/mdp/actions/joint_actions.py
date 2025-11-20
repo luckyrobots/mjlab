@@ -6,7 +6,7 @@ import torch
 
 from mjlab.entity import Entity
 from mjlab.managers.action_manager import ActionTerm
-from mjlab.third_party.isaaclab.isaaclab.utils.string import (
+from mjlab.utils.lab_api.string import (
   resolve_matching_names_values,
 )
 

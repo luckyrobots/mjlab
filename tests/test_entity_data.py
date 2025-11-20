@@ -77,7 +77,7 @@ def test_root_velocity_frame_conversion(device):
   stores it in body frame. This test verifies the conversion happens
   correctly by checking qvel directly.
   """
-  from mjlab.third_party.isaaclab.isaaclab.utils.math import (
+  from mjlab.utils.lab_api.math import (
     quat_apply_inverse,
   )
 

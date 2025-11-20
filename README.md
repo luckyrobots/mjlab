@@ -6,7 +6,10 @@
   <img alt="tests" src="https://github.com/mujocolab/mjlab/actions/workflows/ci.yml/badge.svg" />
 </p>
 
-mjlab combines [Isaac Lab](https://github.com/isaac-sim/IsaacLab)'s proven API with best-in-class [MuJoCo](https://github.com/google-deepmind/mujoco_warp) physics to provide lightweight, modular abstractions for RL robotics research and sim-to-real deployment.
+mjlab combines [Isaac Lab](https://github.com/isaac-sim/IsaacLab)'s proven API
+with best-in-class [MuJoCo](https://github.com/google-deepmind/mujoco_warp)
+physics to provide lightweight, modular abstractions for RL robotics research
+and sim-to-real deployment.
 
 > ⚠️ **BETA PREVIEW** mjlab is in active development. Expect **breaking
 > changes** and **missing features** during the beta phase. There is **no stable
@@ -175,15 +178,15 @@ mjlab is licensed under the [Apache License, Version 2.0](LICENSE).
 
 ### Third-Party Code
 
-The `third_party/` directory contains files from external projects, each with
-its own license:
+Some portions of mjlab are forked from external projects:
 
-- **isaaclab/** — [NVIDIA Isaac Lab](https://github.com/isaac-sim/IsaacLab)
-  ([BSD-3-Clause](src/mjlab/third_party/isaaclab/LICENSE))
+- **`src/mjlab/utils/lab_api/`** — Utilities forked from [NVIDIA Isaac
+  Lab](https://github.com/isaac-sim/IsaacLab) (BSD-3-Clause license, see file
+  headers)
+- **`src/mjlab/asset_zoo/robots/unitree_go1/assets/walk_these_ways/`** — Actuator network from [walk-these-ways](https://github.com/Improbable-AI/walk-these-ways) (MIT license, see asset README)
 
-When distributing or modifying mjlab, comply with:
-1. The Apache-2.0 license for mjlab’s original code
-2. The respective licenses in `third_party/`
+Forked components retain their original licenses (BSD-3-Clause for lab_api, MIT
+for walk-these-ways). See file headers and asset READMEs for details.
 
 ---
 

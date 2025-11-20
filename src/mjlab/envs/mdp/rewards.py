@@ -9,7 +9,7 @@ import torch
 from mjlab.entity import Entity
 from mjlab.managers.manager_term_config import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
-from mjlab.third_party.isaaclab.isaaclab.utils.string import (
+from mjlab.utils.lab_api.string import (
   resolve_matching_names_values,
 )
 

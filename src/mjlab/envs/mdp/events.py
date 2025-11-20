@@ -9,7 +9,7 @@ import torch
 
 from mjlab.entity import Entity, EntityIndexing
 from mjlab.managers.scene_entity_config import SceneEntityCfg
-from mjlab.third_party.isaaclab.isaaclab.utils.math import (
+from mjlab.utils.lab_api.math import (
   quat_from_euler_xyz,
   quat_mul,
   sample_gaussian,

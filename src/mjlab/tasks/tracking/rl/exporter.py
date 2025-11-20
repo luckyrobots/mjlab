@@ -9,7 +9,7 @@ from mjlab.rl.exporter_utils import (
   get_base_metadata,
 )
 from mjlab.tasks.tracking.mdp import MotionCommand
-from mjlab.third_party.isaaclab.isaaclab_rl.rsl_rl.exporter import _OnnxPolicyExporter
+from mjlab.utils.lab_api.rl.exporter import _OnnxPolicyExporter
 
 
 def export_motion_policy_as_onnx(

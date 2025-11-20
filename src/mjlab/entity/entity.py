@@ -12,8 +12,8 @@ import torch
 from mjlab import actuator
 from mjlab.actuator import BuiltinActuatorGroup
 from mjlab.entity.data import EntityData
-from mjlab.third_party.isaaclab.isaaclab.utils.string import resolve_matching_names
 from mjlab.utils import spec_config as spec_cfg
+from mjlab.utils.lab_api.string import resolve_matching_names
 from mjlab.utils.mujoco import dof_width, qpos_width
 from mjlab.utils.string import resolve_expr
 

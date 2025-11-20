@@ -84,7 +84,13 @@ GO1_KNEE_ACTUATOR_CFG = BuiltinPositionActuatorCfg(
 # Learned actuator network trained from walk-these-ways.
 # Model architecture: MLP with 32 hidden units, 2 layers, softsign activation.
 GO1_LEARNED_ACTUATOR_PATH = (
-  MJLAB_SRC_PATH / "third_party" / "walk_these_ways" / "unitree_go1.pt"
+  MJLAB_SRC_PATH
+  / "asset_zoo"
+  / "robots"
+  / "unitree_go1"
+  / "assets"
+  / "walk_these_ways"
+  / "unitree_go1.pt"
 )
 
 GO1_LEARNED_ACTUATOR_CFG = LearnedMlpActuatorCfg(

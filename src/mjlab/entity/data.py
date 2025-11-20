@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Sequence
 import mujoco_warp as mjwarp
 import torch
 
-from mjlab.third_party.isaaclab.isaaclab.utils.math import (
+from mjlab.utils.lab_api.math import (
   quat_apply,
   quat_apply_inverse,
   quat_from_matrix,
