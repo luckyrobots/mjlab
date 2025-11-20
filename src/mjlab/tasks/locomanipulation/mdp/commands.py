@@ -269,11 +269,11 @@ class MotionCommand(CommandTerm):
     return self.motion.body_ang_vel_w[self.time_steps, self.motion_anchor_body_index]
 
   @property
-  def object_pos_w(self) -> torch.Tensor:
+  def ref_object_pos_w(self) -> torch.Tensor:
     return self.motion.object_pos_w[self.time_steps]
 
   @property
-  def object_quat_w(self) -> torch.Tensor:
+  def ref_object_quat_w(self) -> torch.Tensor:
     return self.motion.object_quat_w[self.time_steps]
 
   @property
@@ -316,6 +316,16 @@ class MotionCommand(CommandTerm):
   def robot_anchor_ang_vel_w(self) -> torch.Tensor:
     return self.robot.data.body_link_ang_vel_w[:, self.robot_anchor_body_index]
 
+  @property
+  def object_pos_w(self) -> torch.Tensor:
+    assert self.object is not None
+    return self.object.data.body_link_pos_w[:, 0]
+
+  @property
+  def object_quat_w(self) -> torch.Tensor:
+    assert self.object is not None
+    return self.object.data.body_link_quat_w[:, 0]
+
   def _update_metrics(self):
     self.metrics["error_anchor_pos"] = torch.norm(
       self.anchor_pos_w - self.robot_anchor_pos_w, dim=-1
@@ -349,6 +359,13 @@ class MotionCommand(CommandTerm):
     )
     self.metrics["error_joint_vel"] = torch.norm(
       self.joint_vel - self.robot_joint_vel, dim=-1
+    )
+
+    self.metrics["error_object_pos"] = torch.norm(
+      self.ref_object_pos_w - self.object_pos_w, dim=-1
+    )
+    self.metrics["error_object_rot"] = quat_error_magnitude(
+      self.ref_object_quat_w, self.object_quat_w
     )
 
   def _adaptive_sampling(self, env_ids: torch.Tensor):
@@ -469,13 +486,13 @@ class MotionCommand(CommandTerm):
     self.robot.write_root_state_to_sim(root_state, env_ids=env_ids)
 
     # If an interactive object entity exists, align its root pose with the
-    # motion object's current target pose for the resampled time_steps.
+    # *reference* object's current target pose for the resampled time_steps.
     if self.object is not None:
       object_root_state = torch.zeros(
         (len(env_ids), 13), device=self.device, dtype=torch.float32
       )
-      object_root_state[:, 0:3] = self.object_pos_w[env_ids]
-      object_root_state[:, 3:7] = self.object_quat_w[env_ids]
+      object_root_state[:, 0:3] = self.ref_object_pos_w[env_ids]
+      object_root_state[:, 3:7] = self.ref_object_quat_w[env_ids]
       # Leave linear and angular velocities at zero for now.
       self.object.write_root_state_to_sim(object_root_state, env_ids=env_ids)
 

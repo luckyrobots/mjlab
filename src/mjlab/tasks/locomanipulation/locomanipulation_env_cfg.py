@@ -6,8 +6,6 @@ Robot-specific configurations are located in the config/ directory.
 This is a re-implementation of OmniRetarget (https://omniretarget.github.io/).
 """
 
-import math
-
 from copy import deepcopy
 
 from mjlab.entity.entity import EntityCfg
@@ -29,16 +27,17 @@ from mjlab.sensor import ContactSensorCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.tasks.locomanipulation import mdp
 from mjlab.tasks.locomanipulation.mdp import MotionCommandCfg
+from mjlab.tasks.locomanipulation.config.g1 import rl_cfg as g1_rl_cfg
 from mjlab.terrains import TerrainImporterCfg
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 from mjlab.viewer import ViewerConfig
 
 VELOCITY_RANGE = {
-  "x": (-0.5, 0.5),
-  "y": (-0.5, 0.5),
-  "z": (-0.2, 0.2),
-  "roll": (-0.52, 0.52),
-  "pitch": (-0.52, 0.52),
+  "x": (-0.3, 0.3),
+  "y": (-0.3, 0.3),
+  "z": (-0.0, 0.0),
+  "roll": (-0.0, 0.0),
+  "pitch": (-0.0, 0.0),
   "yaw": (-0.78, 0.78),
 }
 
@@ -65,9 +64,14 @@ SIM_CFG = SimulationCfg(
 
 EPISODE_LENGTH_S = 10.0
 DECIMATION = 4
-EPISODE_STEPS = math.ceil(
+EPISODE_STEPS = int(
   EPISODE_LENGTH_S / (SIM_CFG.mujoco.timestep * DECIMATION)
 )
+
+
+def iters_to_steps(iters: int) -> int:
+    """Convert PPO iterations to env.common_step_counter units."""
+    return iters * g1_rl_cfg.UNITREE_G1_LOCOMANIPULATION_PPO_RUNNER_CFG.num_steps_per_env
 
 
 def create_locomanipulation_env_cfg(
@@ -379,18 +383,25 @@ def create_locomanipulation_env_cfg(
   }
 
   curriculum = {
-      "object_terminations": CurriculumTermCfg(
-          func=mdp.object_termination_curriculum,
-          params={
-              "stages": [
-                  {"step": 0, "pos_threshold": 1e6, "ori_threshold": 1e6},
-                  {"step": 3_000 * EPISODE_STEPS, "pos_threshold": 2.5, "ori_threshold": 2.0},
-                  {"step": 6_000 * EPISODE_STEPS, "pos_threshold": 2.0, "ori_threshold": 1.57},
-                  {"step": 10_000 * EPISODE_STEPS, "pos_threshold": 1.5, "ori_threshold": 1.2},
-                  {"step": 15_000 * EPISODE_STEPS, "pos_threshold": 1.0, "ori_threshold": 0.8},
-              ]
-          },
-      ),
+    "object_terminations": CurriculumTermCfg(
+        func=mdp.object_termination_curriculum,
+        params={
+            "stages": [
+                # Stage 0: Infinite Tolerance (Focus on Motion Tracking)
+                {"step": 0, "pos_threshold": 1e6, "ori_threshold": 1e6},
+                # Stage 1: Soft Limit (Introduce Object Relevance)
+                {"step": iters_to_steps(4_000), "pos_threshold": 20.0, "ori_threshold": 5.0}, 
+                # Stage 2: Hitting the Original Collapse Point (Now much softer)
+                {"step": iters_to_steps(7_500), "pos_threshold": 5.0, "ori_threshold": 2.5},
+                # Stage 3: Closing the Gap (Reached original target threshold later)
+                {"step": iters_to_steps(11_000), "pos_threshold": 2.0, "ori_threshold": 1.57},
+                # Stage 4: Near Final Target (Gradual approach)
+                {"step": iters_to_steps(15_000), "pos_threshold": 1.5, "ori_threshold": 1.2},
+                # Stage 5: Final Target Constraint
+                {"step": iters_to_steps(22_500), "pos_threshold": 1.0, "ori_threshold": 0.8}
+            ]
+        }
+    )
   }
 
   return ManagerBasedRlEnvCfg(

@@ -128,19 +128,23 @@ def run_play(task: str, cfg: PlayConfig):
     )
 
     if DUMMY_MODE:
-      if not cfg.registry_name:
-        raise ValueError(
-          "Motion-command tasks require `registry_name` when using dummy agents."
-        )
-      # Check if the registry name includes alias, if not, append ":latest".
-      registry_name = cfg.registry_name
-      if ":" not in registry_name:
-        registry_name = registry_name + ":latest"
-      import wandb
+      if cfg.motion_file is not None:
+        print(f"[INFO]: Using motion file from CLI: {cfg.motion_file}")
+        motion_cmd.motion_file = cfg.motion_file
+      elif cfg.registry_name is not None:
+        # Check if the registry name includes alias, if not, append ":latest".
+        registry_name = cfg.registry_name
+        if ":" not in registry_name:
+          registry_name = registry_name + ":latest"
+        import wandb
 
-      api = wandb.Api()
-      artifact = api.artifact(registry_name)
-      motion_cmd.motion_file = str(Path(artifact.download()) / "motion.npz")
+        api = wandb.Api()
+        artifact = api.artifact(registry_name)
+        motion_cmd.motion_file = str(Path(artifact.download()) / "motion.npz")
+      else:
+        raise ValueError(
+          "Motion-command tasks require `registry_name` or `motion_file` when using dummy agents."
+        )
     else:
       if cfg.motion_file is not None:
         print(f"[INFO]: Using motion file from CLI: {cfg.motion_file}")

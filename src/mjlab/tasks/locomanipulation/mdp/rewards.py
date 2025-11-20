@@ -119,9 +119,8 @@ def object_global_position_error_exp(
   std: float,
 ) -> torch.Tensor:
   command = cast(MotionCommand, env.command_manager.get_term(command_name))
-  object = env.scene["object"]
   error = torch.sum(
-    torch.square(command.object_pos_w - object.data.body_link_pos_w[:, 0]), dim=-1
+    torch.square(command.ref_object_pos_w - command.object_pos_w), dim=-1
   )
   return torch.exp(-error / std**2)
 
@@ -132,8 +131,7 @@ def object_global_orientation_error_exp(
   std: float,
 ) -> torch.Tensor:
   command = cast(MotionCommand, env.command_manager.get_term(command_name))
-  object = env.scene["object"]
-  error = quat_error_magnitude(command.object_quat_w, object.data.body_link_quat_w[:, 0]) ** 2
+  error = quat_error_magnitude(command.ref_object_quat_w, command.object_quat_w) ** 2
   return torch.exp(-error / std**2)
 
 

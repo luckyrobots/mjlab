@@ -95,12 +95,7 @@ def bad_object_pos(
   threshold: float,
 ) -> torch.Tensor:
   command = cast(MotionCommand, env.command_manager.get_term(command_name))
-  object = env.scene["object"]
-  error = torch.norm(
-    command.object_pos_w
-     - object.data.body_link_pos_w[:, 0],
-    dim=-1
-  )
+  error = torch.norm(command.ref_object_pos_w - command.object_pos_w, dim=-1)
   return error > threshold
 
 
@@ -110,6 +105,5 @@ def bad_object_ori(
   threshold: float,
 ) -> torch.Tensor:
   command = cast(MotionCommand, env.command_manager.get_term(command_name))
-  obj = env.scene["object"]
-  error = quat_error_magnitude(command.object_quat_w, obj.data.body_link_quat_w[:, 0])
+  error = quat_error_magnitude(command.ref_object_quat_w, command.object_quat_w)
   return error > threshold
