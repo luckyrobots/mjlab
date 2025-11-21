@@ -560,10 +560,10 @@ class MotionCommand(CommandTerm):
         obj_indexing = self.object.indexing
         obj_free_joint_q_adr = obj_indexing.free_joint_q_adr.cpu().numpy()
         qpos[obj_free_joint_q_adr[0:3]] = (
-          self.object_pos_w[visualizer.env_idx].cpu().numpy()
+          self.ref_object_pos_w[visualizer.env_idx].cpu().numpy()
         )
         qpos[obj_free_joint_q_adr[3:7]] = (
-          self.object_quat_w[visualizer.env_idx].cpu().numpy()
+          self.ref_object_quat_w[visualizer.env_idx].cpu().numpy()
         )
 
       visualizer.add_ghost_mesh(qpos, model=self._ghost_model)

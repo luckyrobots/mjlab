@@ -383,25 +383,20 @@ def create_locomanipulation_env_cfg(
   }
 
   curriculum = {
-    "object_terminations": CurriculumTermCfg(
-        func=mdp.object_termination_curriculum,
-        params={
-            "stages": [
-                # Stage 0: Infinite Tolerance (Focus on Motion Tracking)
-                {"step": 0, "pos_threshold": 1e6, "ori_threshold": 1e6},
-                # Stage 1: Soft Limit (Introduce Object Relevance)
-                {"step": iters_to_steps(4_000), "pos_threshold": 20.0, "ori_threshold": 5.0}, 
-                # Stage 2: Hitting the Original Collapse Point (Now much softer)
-                {"step": iters_to_steps(7_500), "pos_threshold": 5.0, "ori_threshold": 2.5},
-                # Stage 3: Closing the Gap (Reached original target threshold later)
-                {"step": iters_to_steps(11_000), "pos_threshold": 2.0, "ori_threshold": 1.57},
-                # Stage 4: Near Final Target (Gradual approach)
-                {"step": iters_to_steps(15_000), "pos_threshold": 1.5, "ori_threshold": 1.2},
-                # Stage 5: Final Target Constraint
-                {"step": iters_to_steps(22_500), "pos_threshold": 1.0, "ori_threshold": 0.8}
-            ]
-        }
-    )
+      "object_terminations": CurriculumTermCfg(
+          func=mdp.object_termination_curriculum,
+          params={
+              "stages": [
+                  # Stage 0: Extended Warm-up (0 - 15,000 Iterations)
+                  # Goal: Let all body tracking and velocity errors fully converge.
+                  {"step": 0, "pos_threshold": 1e6, "ori_threshold": 1e6},
+
+                  # Stage 1: The Binary Switch (Strict Enforcement)
+                  # Apply the final paper-defined constraint after maximum body stability.
+                  {"step": iters_to_steps(15_000), "pos_threshold": 1.0, "ori_threshold": 0.78}, 
+              ]
+          }
+      )
   }
 
   return ManagerBasedRlEnvCfg(
