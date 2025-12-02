@@ -270,7 +270,7 @@ class MotionCommand(CommandTerm):
 
   @property
   def ref_object_pos_w(self) -> torch.Tensor:
-    return self.motion.object_pos_w[self.time_steps]
+    return self.motion.object_pos_w[self.time_steps] + self._env.scene.env_origins
 
   @property
   def ref_object_quat_w(self) -> torch.Tensor:

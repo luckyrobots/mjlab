@@ -32,14 +32,6 @@ from mjlab.terrains import TerrainImporterCfg
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 from mjlab.viewer import ViewerConfig
 
-VELOCITY_RANGE = {
-  "x": (-0.3, 0.3),
-  "y": (-0.3, 0.3),
-  "z": (-0.0, 0.0),
-  "roll": (-0.0, 0.0),
-  "pitch": (-0.0, 0.0),
-  "yaw": (-0.78, 0.78),
-}
 
 SCENE_CFG = SceneCfg(terrain=TerrainImporterCfg(terrain_type="plane"), num_envs=1)
 
@@ -53,19 +45,14 @@ VIEWER_CONFIG = ViewerConfig(
 )
 
 SIM_CFG = SimulationCfg(
-  nconmax=35,
-  njmax=250,
+  nconmax=128,
+  njmax=1024,
+  contact_sensor_maxmatch=128,
   mujoco=MujocoCfg(
     timestep=0.005,
     iterations=10,
     ls_iterations=20,
   ),
-)
-
-EPISODE_LENGTH_S = 10.0
-DECIMATION = 4
-EPISODE_STEPS = int(
-  EPISODE_LENGTH_S / (SIM_CFG.mujoco.timestep * DECIMATION)
 )
 
 
@@ -89,7 +76,7 @@ def create_locomanipulation_env_cfg(
   joint_position_range: tuple[float, float],
   objects: dict[str, EntityCfg] | None = None,
 ) -> ManagerBasedRlEnvCfg:
-  """Create a locomanipulation task configuration for locomanipulation.
+  """Create a locomanipulation task configuration.
 
   Args:
     robot_cfg: Robot configuration.
@@ -327,6 +314,16 @@ def create_locomanipulation_env_cfg(
       weight=1.0,
       params={"command_name": "motion", "std": 3.14},
     ),
+    "object_pos": RewardTermCfg(
+      func=mdp.object_global_position_error_exp,
+      weight=1.0,
+      params={"command_name": "motion", "std": 0.3},
+    ),
+    "object_ori": RewardTermCfg(
+      func=mdp.object_global_orientation_error_exp,
+      weight=1.0,
+      params={"command_name": "motion", "std": 0.4},
+    ),
     "action_rate_l2": RewardTermCfg(func=mdp.action_rate_l2, weight=-1e-1),
     "joint_limit": RewardTermCfg(
       func=mdp.joint_pos_limits,
@@ -335,18 +332,8 @@ def create_locomanipulation_env_cfg(
     ),
     "self_collisions": RewardTermCfg(
       func=mdp.self_collision_cost,
-      weight=-10.0,
+      weight=-0.1,
       params={"sensor_name": "self_collision"},
-    ),
-    "object_pos": RewardTermCfg(
-      func=mdp.object_global_position_error_exp,
-      weight=0.5,
-      params={"command_name": "motion", "std": 0.3},
-    ),
-    "object_ori": RewardTermCfg(
-      func=mdp.object_global_orientation_error_exp,
-      weight=0.5,
-      params={"command_name": "motion", "std": 0.4},
     ),
   }
 
@@ -387,12 +374,9 @@ def create_locomanipulation_env_cfg(
           func=mdp.object_termination_curriculum,
           params={
               "stages": [
-                  # Stage 0: Extended Warm-up (0 - 15,000 Iterations)
-                  # Goal: Let all body tracking and velocity errors fully converge.
+                  # Let all body tracking and velocity errors fully converge.
                   {"step": 0, "pos_threshold": 1e6, "ori_threshold": 1e6},
-
-                  # Stage 1: The Binary Switch (Strict Enforcement)
-                  # Apply the final paper-defined constraint after maximum body stability.
+                  # Apply the final constraint after maximum body stability.
                   {"step": iters_to_steps(15_000), "pos_threshold": 1.0, "ori_threshold": 0.78}, 
               ]
           }
@@ -410,6 +394,6 @@ def create_locomanipulation_env_cfg(
     events=events,
     sim=SIM_CFG,
     viewer=viewer,
-    decimation=DECIMATION,
-    episode_length_s=EPISODE_LENGTH_S,
+    decimation=4,
+    episode_length_s=10.0,
   )

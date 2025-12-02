@@ -136,7 +136,9 @@ def object_global_orientation_error_exp(
 
 
 def self_collision_cost(env: ManagerBasedRlEnv, sensor_name: str) -> torch.Tensor:
-  """Cost that returns the number of self-collisions detected by a sensor."""
-  sensor: ContactSensor = env.scene[sensor_name]
-  assert sensor.data.found is not None
-  return sensor.data.found.squeeze(-1)
+    sensor: ContactSensor = env.scene[sensor_name]
+    assert sensor.data.force is not None
+    forces = sensor.data.force
+    force_magnitudes = torch.norm(forces, dim=-1)
+    violations = (force_magnitudes > 1.0).float()
+    return torch.sum(violations, dim=-1)
