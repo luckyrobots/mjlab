@@ -45,9 +45,8 @@ VIEWER_CONFIG = ViewerConfig(
 )
 
 SIM_CFG = SimulationCfg(
-  nconmax=128,
-  njmax=1024,
-  contact_sensor_maxmatch=128,
+  nconmax=35,
+  njmax=250,
   mujoco=MujocoCfg(
     timestep=0.005,
     iterations=10,
