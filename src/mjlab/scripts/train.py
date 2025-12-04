@@ -54,22 +54,32 @@ def run_train(cfg: TrainConfig) -> None:
   )
 
   if is_tracking_task:
-    if not cfg.registry_name:
-      raise ValueError("Must provide --registry-name for tracking tasks.")
+    if cfg.motion_file:
+      assert cfg.env.commands is not None
+      motion_cmd = cfg.env.commands["motion"]
+      assert isinstance(motion_cmd, TrackingMotionCommandCfg)
+      motion_cmd.motion_file = cfg.motion_file
 
-    # Check if the registry name includes alias, if not, append ":latest".
-    registry_name = cast(str, cfg.registry_name)
-    if ":" not in registry_name:
-      registry_name = registry_name + ":latest"
-    import wandb
+    elif cfg.registry_name:
+      # Check if the registry name includes alias, if not, append ":latest".
+      registry_name = cast(str, cfg.registry_name)
+      if ":" not in registry_name:
+        registry_name = registry_name + ":latest"
+      import wandb
 
-    api = wandb.Api()
-    artifact = api.artifact(registry_name)
+      api = wandb.Api()
+      artifact = api.artifact(registry_name)
 
-    assert cfg.env.commands is not None
-    motion_cmd = cfg.env.commands["motion"]
-    assert isinstance(motion_cmd, TrackingMotionCommandCfg)
-    motion_cmd.motion_file = str(Path(artifact.download()) / "motion.npz")
+      assert cfg.env.commands is not None
+      motion_cmd = cfg.env.commands["motion"]
+      assert isinstance(motion_cmd, TrackingMotionCommandCfg)
+      motion_cmd.motion_file = str(Path(artifact.download()) / "motion.npz")
+
+    elif not cfg.env.commands["motion"].motion_file:
+      raise ValueError(
+        "Must provide --registry-name or --motion-file for tracking tasks, "
+        "or use a config with a pre-defined motion file."
+      )
 
   # For non-tracking tasks that still use a "motion" command term (e.g.,
   # locomanipulation), allow overriding the motion source via --motion-file.

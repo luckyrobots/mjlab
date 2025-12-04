@@ -22,6 +22,7 @@ from mjlab.managers.manager_term_config import (
   ObservationTermCfg,
   RewardTermCfg,
   TerminationTermCfg,
+  CurriculumTermCfg,
 )
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.scene import SceneCfg
@@ -317,6 +318,21 @@ def create_tracking_env_cfg(
     ),
   }
 
+  curriculum = {
+    "motion_weights": CurriculumTermCfg(
+      func=mdp.motion_weights_curriculum,
+      params={
+        "weights_schedule": {
+                0:    [0.0, 0.0, 0.0, 1.0],     # 0-30000 iterations: Walk only
+                30000: [0.0, 0.5, 0.0, 0.5],   # 30000-45000 iterations: 50% Run, 50% Walk
+                45000: [0.0, 0.3, 0.4, 0.3],   # 45000-60000 iterations: 30% Run, 40% Sprint, 30% Walk
+                60000: [0.25, 0.25, 0.25, 0.25], # 60000+ iterations: Uniform (include Fall/GetUp)
+        },
+        "command_name": "motion",
+      },
+    )
+  }
+
   return ManagerBasedRlEnvCfg(
     scene=scene,
     observations=observations,
@@ -325,6 +341,7 @@ def create_tracking_env_cfg(
     rewards=rewards,
     terminations=terminations,
     events=events,
+    curriculum=curriculum,
     sim=SIM_CFG,
     viewer=viewer,
     decimation=4,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 import mujoco
@@ -68,6 +69,60 @@ class MotionLoader:
     return self._body_ang_vel_w[:, self._body_indexes]
 
 
+class MultiMotionLoader:
+  """Concatenate multiple motions into a single long trajectory.
+
+  This enables training a single policy over a set of related motions.
+  Sampling logic in `MotionCommand` remains unchanged and operates over the unified timeline.
+  """
+
+  def __init__(
+    self, motion_files: list[str], body_indexes: torch.Tensor, device: str = "cpu"
+  ) -> None:
+    if len(motion_files) == 0:
+      raise ValueError("MultiMotionLoader requires at least one motion file.")
+
+    # Load each motion independently.
+    loaders = [
+      MotionLoader(motion_file=mf, body_indexes=body_indexes, device=device)
+      for mf in motion_files
+    ]
+
+    self.joint_pos = torch.cat([m.joint_pos for m in loaders], dim=0)
+    self.joint_vel = torch.cat([m.joint_vel for m in loaders], dim=0)
+    self._body_pos_w = torch.cat([m._body_pos_w for m in loaders], dim=0)
+    self._body_quat_w = torch.cat([m._body_quat_w for m in loaders], dim=0)
+    self._body_lin_vel_w = torch.cat([m._body_lin_vel_w for m in loaders], dim=0)
+    self._body_ang_vel_w = torch.cat([m._body_ang_vel_w for m in loaders], dim=0)
+
+    self._body_indexes = body_indexes
+    self.time_step_total = self.joint_pos.shape[0]
+
+    # Compute ranges for each sub-motion in the concatenated timeline.
+    self.ranges = []
+    start_idx = 0
+    for m in loaders:
+      end_idx = start_idx + m.time_step_total
+      self.ranges.append((start_idx, end_idx))
+      start_idx = end_idx
+
+  @property
+  def body_pos_w(self) -> torch.Tensor:
+    return self._body_pos_w[:, self._body_indexes]
+
+  @property
+  def body_quat_w(self) -> torch.Tensor:
+    return self._body_quat_w[:, self._body_indexes]
+
+  @property
+  def body_lin_vel_w(self) -> torch.Tensor:
+    return self._body_lin_vel_w[:, self._body_indexes]
+
+  @property
+  def body_ang_vel_w(self) -> torch.Tensor:
+    return self._body_ang_vel_w[:, self._body_indexes]
+
+
 class MotionCommand(CommandTerm):
   cfg: MotionCommandCfg
   _env: ManagerBasedRlEnv
@@ -86,9 +141,31 @@ class MotionCommand(CommandTerm):
       device=self.device,
     )
 
-    self.motion = MotionLoader(
-      self.cfg.motion_file, self.body_indexes, device=self.device
-    )
+    # Resolve motion sources from `motion_file` only:
+    # - If it points to a directory, load all *.npz in it as a multi-motion.
+    # - Else treat it as a single motion file.
+    motion_path = Path(self.cfg.motion_file)
+    if motion_path.is_dir():
+      motion_files = sorted(str(p) for p in motion_path.glob("*.npz") if p.is_file())
+      if not motion_files:
+        raise ValueError(
+          f"MotionCommand: directory '{motion_path}' contains no .npz motion files."
+        )
+      if len(motion_files) == 1:
+        self.motion = MotionLoader(
+          motion_files[0], self.body_indexes, device=self.device
+        )
+      else:
+        self.motion = MultiMotionLoader(
+          motion_files=motion_files,
+          body_indexes=self.body_indexes,
+          device=self.device,
+        )
+    else:
+      self.motion = MotionLoader(
+        self.cfg.motion_file, self.body_indexes, device=self.device
+      )
+
     self.time_steps = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
     self.body_pos_relative_w = torch.zeros(
       self.num_envs, len(cfg.body_names), 3, device=self.device
@@ -111,6 +188,11 @@ class MotionCommand(CommandTerm):
     )
     self.kernel = self.kernel / self.kernel.sum()
 
+    # Motion weighting for curriculum learning (only for MultiMotionLoader).
+    self.motion_weights: torch.Tensor | None = None
+    if self.cfg.motion_weights is not None:
+      self.set_motion_weights(self.cfg.motion_weights)
+
     self.metrics["error_anchor_pos"] = torch.zeros(self.num_envs, device=self.device)
     self.metrics["error_anchor_rot"] = torch.zeros(self.num_envs, device=self.device)
     self.metrics["error_anchor_lin_vel"] = torch.zeros(
@@ -130,6 +212,20 @@ class MotionCommand(CommandTerm):
     # Ghost model created lazily on first visualization
     self._ghost_model: mujoco.MjModel | None = None
     self._ghost_color = np.array(cfg.viz.ghost_color, dtype=np.float32)
+
+  def set_motion_weights(self, weights: list[float]):
+    """Update probability weights for each motion file in MultiMotionLoader."""
+    if not isinstance(self.motion, MultiMotionLoader):
+      return
+    if len(weights) != len(self.motion.ranges):
+      raise ValueError(
+        f"Expected {len(self.motion.ranges)} weights, got {len(weights)}"
+      )
+    w_tensor = torch.tensor(weights, dtype=torch.float32, device=self.device)
+    if w_tensor.sum() == 0:
+       # If sum is zero (e.g. all zeros), revert to uniform
+       w_tensor[:] = 1.0
+    self.motion_weights = w_tensor / w_tensor.sum()
 
   @property
   def command(self) -> torch.Tensor:
@@ -280,6 +376,41 @@ class MotionCommand(CommandTerm):
     ).view(-1)
 
     sampling_probabilities = sampling_probabilities / sampling_probabilities.sum()
+
+    # If weights are set and we have a multi-motion, re-weight the probabilities
+    # to respect the target distribution over files.
+    if self.motion_weights is not None and isinstance(self.motion, MultiMotionLoader):
+      # Map bins to motion files
+      # This assumes bin size is constant over the timeline.
+      total_steps = self.motion.time_step_total
+      bins_per_step = self.bin_count / total_steps
+      
+      # We need to adjust probabilities such that the sum of probs for each file
+      # equals the target weight.
+      
+      new_probs = sampling_probabilities.clone()
+      
+      for i, (start, end) in enumerate(self.motion.ranges):
+        # Convert steps to bins
+        bin_start = int(start * bins_per_step)
+        bin_end = int(end * bins_per_step)
+        if i == len(self.motion.ranges) - 1:
+            bin_end = self.bin_count # Ensure coverage
+            
+        # Get current total probability for this file
+        current_file_prob = sampling_probabilities[bin_start:bin_end].sum()
+        
+        if current_file_prob > 1e-6:
+            scale = self.motion_weights[i] / current_file_prob
+            new_probs[bin_start:bin_end] *= scale
+        else:
+             # Fallback if the adaptive sampling put 0 mass here:
+             # Distribute weight uniformly across this file's bins
+             n_bins = bin_end - bin_start
+             if n_bins > 0:
+                 new_probs[bin_start:bin_end] = self.motion_weights[i] / n_bins
+      
+      sampling_probabilities = new_probs / new_probs.sum()
 
     sampled_bins = torch.multinomial(
       sampling_probabilities, len(env_ids), replacement=True
@@ -493,6 +624,7 @@ class MotionCommandCfg(CommandTermCfg):
   adaptive_uniform_ratio: float = 0.1
   adaptive_alpha: float = 0.001
   sampling_mode: Literal["adaptive", "uniform", "start"] = "adaptive"
+  motion_weights: list[float] | None = None
 
   @dataclass
   class VizCfg:
